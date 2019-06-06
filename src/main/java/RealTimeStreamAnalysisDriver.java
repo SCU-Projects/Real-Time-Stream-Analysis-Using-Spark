@@ -7,9 +7,7 @@ import org.apache.spark.streaming.api.java.JavaReceiverInputDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
 import scala.Tuple2;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -25,17 +23,24 @@ public class RealTimeStreamAnalysisDriver {
         Logger.getAnonymousLogger().setLevel(Level.SEVERE);
 
         // Receive streaming data from the source
-        JavaReceiverInputDStream<String> lines = streamingContext.socketTextStream(Constants.HOST, Constants.PORT);
-        JavaDStream<String> words = lines.flatMap(x -> Arrays.asList(x.split(" ")).iterator());
-        JavaPairDStream<String, Integer> pairs = words.mapToPair(s -> new Tuple2<>(s, 1));
-        JavaPairDStream<String, Integer> wordCounts = pairs.reduceByKey((i1, i2) -> i1 + i2);
-
-// Print the first ten elements of each RDD generated in this DStream to the console
-        wordCounts.print();
+        JavaReceiverInputDStream<String> udpPacket = streamingContext.socketTextStream(Constants.HOST, Constants.PORT);
+        List<Long> octetsList = new ArrayList<>();
+        udpPacket.foreachRDD(packet -> octetsList.add(Long.parseLong(packet.toString().split(",")[16])));
+        Long max = Long.MIN_VALUE;
+        Long mean = Long.valueOf(0);
+        for(Long octet : octetsList){
+            System.out.println(octet+"\t");
+            if(max < octet)
+                max = octet;
+            mean += octet;
+        }
+        mean /= octetsList.size();
+        System.out.println("Max:" + max + "\tAvg:" + mean);
         // Execute the Spark workflow defined above
         streamingContext.start();
-        streamingContext.awaitTermination();
+        streamingContext.awaitTerminationOrTimeout(15000);
         streamingContext.stop();
     }
+
 
 }
